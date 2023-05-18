@@ -1,8 +1,6 @@
 import streamlit as st
-import pandas as pd
 import io
 import os
-import codecs
 from langchain.agents import create_csv_agent
 from langchain.llms import OpenAI
 
@@ -11,10 +9,7 @@ def create_agent(api_key, csv_data, temperature=0, encoding="utf-8"):
     return create_csv_agent(OpenAI(temperature=temperature), csv_data, verbose=True, encoding=encoding)
 
 def run_agent(agent, query):
-    if agent is not None:
-        return agent.run(query)
-    else:
-        return None
+    return agent.run(query) if agent else None
 
 def main():
     st.title("CSV Assistant")
@@ -34,23 +29,25 @@ def main():
     uploaded_file = st.file_uploader("Upload a CSV file", type="csv")
 
     agent = None
-    if openai_api_key and uploaded_file is not None:
+    if openai_api_key and uploaded_file:
         csv_data = io.StringIO()
-        if uploaded_file.name.endswith('.csv'):
-            try:
-                df = pd.read_csv(uploaded_file, encoding="utf-8")
-            except UnicodeDecodeError:
-                uploaded_file.seek(0)
-                df = pd.read_csv(codecs.iterdecode(uploaded_file, 'utf-8'), encoding="utf-8")
-        else:
-            st.write("File type not supported. Please upload a CSV file.")
-        df.to_csv(csv_data, index=False)
-        csv_data.seek(0)
-        agent = create_agent(openai_api_key, csv_data)
+        try:
+            # Read the uploaded CSV file and decode it as UTF-8
+            content = uploaded_file.read().decode("utf-8")
+            csv_data.write(content)
+            csv_data.seek(0)
+            
+            # Create the language model agent using the OpenAI API key and the CSV data
+            agent = create_agent(openai_api_key, csv_data)
+        except UnicodeDecodeError:
+            # If the file cannot be decoded as UTF-8, display an error message
+            st.write("Error: Invalid encoding. Please upload a CSV file encoded in UTF-8.")
+            return
 
     query = st.text_input("Enter your query")
 
     try:
+        # Run the language model agent with the query
         response = run_agent(agent, query)
         if response:
             st.write(response)
